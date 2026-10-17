@@ -1,0 +1,200 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  NextGen UAV Labs — Prisma schema
+//  Datasource: PostgreSQL
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum ProgramType {
+  INTERNSHIP
+  WORKSHOP
+}
+
+enum ProgramStatus {
+  LIVE
+  UPCOMING
+  ARCHIVED
+}
+
+enum ApplicationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum DocumentType {
+  RESUME
+  ID_PROOF
+  TRANSCRIPT
+  CERTIFICATE
+  OTHER
+}
+
+// ───────────────────────────── Models ────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(STUDENT)
+  name         String
+  status       UserStatus @default(ACTIVE)
+  phone        String?
+  city         String?
+  institution  String?
+  bio          String?
+  avatarUrl    String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  applications Application[]
+  documents    Document[]
+  certificates Certificate[]
+
+  @@index([role])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Program {
+  id          String        @id @default(cuid())
+  title       String
+  type        ProgramType
+  description String
+  duration    String
+  status      ProgramStatus @default(UPCOMING)
+  image       String?
+  summary     String?
+  curriculum  String[]      @default([])
+  outcomes    String[]      @default([])
+  seats       Int           @default(30)
+  stipend     String?
+  mode        String?       @default("Hybrid")
+  location    String?
+  startDate   DateTime?
+  endDate     DateTime?
+  published   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  applications Application[]
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Application {
+  id          String            @id @default(cuid())
+  userId      String
+  programId   String
+  status      ApplicationStatus @default(PENDING)
+  resumeUrl   String?
+  coverNote   String?
+  reviewNote  String?
+  score       Int?
+  submittedAt DateTime          @default(now())
+  reviewedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, programId])
+  @@index([status])
+  @@index([userId])
+  @@index([programId])
+  @@index([createdAt])
+}
+
+model DroneComponent {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  category    String
+  specs       String[] @default([])
+  imageUrl    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([order])
+}
+
+model Document {
+  id        String       @id @default(cuid())
+  userId    String
+  name      String
+  type      DocumentType @default(OTHER)
+  url       String
+  size      Int?
+  mimeType  String?
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+}
+
+model Certificate {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  programName String
+  issuedOn    DateTime @default(now())
+  serial      String   @unique
+  url         String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  target    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+/// Persisted counter for the in-memory rate limiter fallback.
+/// Used only when Upstash Redis credentials are not configured.
+model RateLimitBucket {
+  key       String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+}
